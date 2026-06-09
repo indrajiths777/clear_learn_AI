@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClearLearn</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #121212; --card: #1e1e1e; --text: #e8e8e8;
+            --muted: #b5b5b5; --accent: #4ea8ff; --border: #2c2c2c;
+            --correct: #4ea8ff; --incorrect: #ffb84d;
+        }
+        body {
+            margin: 0; font-family: Arial, sans-serif;
+            background: radial-gradient(circle at top left, #1a1a1a, #121212 60%);
+            color: var(--text); font-size: 18px; line-height: 1.8;
+        }
+        .bg-brain {
+            position: fixed; right: -40px; bottom: -20px;
+            width: 420px; opacity: 0.06; pointer-events: none;
+        }
+        .container { max-width: 850px; margin: auto; padding: 30px 20px; position: relative; z-index: 1; }
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { font-size: 32px; color: var(--accent); }
+        .card { background: var(--card); padding: 22px; border-radius: 14px; margin-top: 20px; border: 1px solid var(--border); }
+        input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: #181818; color: var(--text); font-size: 16px; box-sizing: border-box;}
+        button { padding: 12px 16px; border-radius: 10px; border: none; background: #2a2a2a; color: var(--text); font-size: 16px; margin-top: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        button:hover { background: #333; }
+        
+        /* Interactive Quiz Elements */
+        .quiz-opt { display: block; width: 100%; text-align: left; background: #252525; border: 1px solid var(--border); margin-bottom: 8px; transition: 0.2s; }
+        .quiz-opt:hover { border-color: var(--accent); }
+        .feedback { margin-top: 10px; padding: 10px; border-radius: 8px; border-left: 5px solid var(--accent); background: rgba(255,255,255,0.05); display: none; }
+        .is-correct { color: var(--correct); border-color: var(--correct); }
+        .is-incorrect { color: var(--incorrect); border-color: var(--incorrect); }
+        
+        .large-text { font-size: 24px; }
+        .high-contrast { background: #000; color: #fff; }
+        .dyslexia { font-family: 'Lexend', sans-serif; letter-spacing: 0.6px; line-height: 2; }
+        footer { text-align: center; margin-top: 40px; font-size: 14px; color: var(--muted); }
+    </style>
+</head>
+<body>
+
+<svg class="bg-brain" viewBox="0 0 640 512"><path d="M320 64 C260 20,180 20,140 90 C80 90,40 140,40 200 C0 230,0 290,40 320 C40 380,100 420,160 400 C180 460,260 480,320 440 C380 480,460 460,480 400 C540 420,600 380,600 320 C640 290,640 230,600 200 C600 140,560 90,500 90 C460 20,380 20,320 64 Z" fill="none" stroke="white" stroke-width="6"/></svg>
+
+<div class="container">
+    <header>
+        <h1>ClearLearn</h1>
+        <div style="color:var(--muted)">Accessible Micro-Learning for Everyone</div>
+    </header>
+
+    <div class="card">
+        <input type="text" id="topic" placeholder="Enter Topic (Example: Java Loops)">
+        <button onclick="generateLesson()">📘 Generate Lesson</button>
+        <div style="margin-top: 15px;">
+            <button onclick="toggleLargeText()">🔠 Text Size</button>
+            <button onclick="toggleContrast()">◐ Contrast</button>
+            <button onclick="toggleDyslexia()">📖 Dyslexia Mode</button>
+        </div>
+        <div style="margin-top: 10px;">
+            <button onclick="playAudio(1)">▶ Play</button>
+            <button onclick="playAudio(0.5)">🐢 Slow</button>
+            <button onclick="stopAudio()">⏹ Stop</button>
+            <button onclick="replayAudio()">↺ Replay</button>
+        </div>
+    </div>
+
+    <div class="card" id="lesson">Your lesson will appear here...</div>
+    <div class="card" id="quiz">Quiz will appear here...</div>
+    <footer>ClearLearn © 2026</footer>
+</div>
+
+<script>
+    let lessonText = "";
+    let currentSpeech = null;
+
+    async function generateLesson() {
+        const topic = document.getElementById("topic").value;
+        const lessonDiv = document.getElementById("lesson");
+        const quizDiv = document.getElementById("quiz");
+
+        if (!topic) return alert("Enter a topic!");
+        lessonDiv.innerHTML = "⏳ <b>ClearLearn Agent is drafting and reflecting...</b>";
+        quizDiv.innerHTML = "";
+        
+        try {
+            const response = await fetch("http://127.0.0.1:8000/generate", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ topic: topic })
+            });
+            const data = await response.json();
+            
+            lessonText = data.lesson;
+            lessonDiv.innerHTML = lessonText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+            
+            // Build Interactive Quiz
+            quizDiv.innerHTML = "<h3>Interactive Quiz</h3>";
+            data.quiz.forEach((q, i) => {
+                const qBlock = document.createElement("div");
+                qBlock.style.marginBottom = "20px";
+                qBlock.innerHTML = `<p><b>Q${i+1}:</b> ${q.question}</p>`;
+                
+                q.options.forEach(opt => {
+                    const btn = document.createElement("button");
+                    btn.className = "quiz-opt";
+                    btn.innerText = opt;
+                    btn.onclick = () => verifyChoice(opt, q.answer, q.question, qBlock);
+                    qBlock.appendChild(btn);
+                });
+                
+                const feedback = document.createElement("div");
+                feedback.className = "feedback";
+                qBlock.appendChild(feedback);
+                quizDiv.appendChild(qBlock);
+            });
+        } catch (e) {
+            lessonDiv.innerHTML = "❌ Error connecting to Agent. Ensure main.py is running.";
+        }
+    }
+
+    async function verifyChoice(selected, correct, question, qBlock) {
+        const feedbackDiv = qBlock.querySelector(".feedback");
+        const response = await fetch("http://127.0.0.1:8000/verify", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ question, selected_option: selected, correct_answer: correct })
+        });
+        const data = await response.json();
+        feedbackDiv.style.display = "block";
+        feedbackDiv.className = "feedback " + (data.is_correct ? "is-correct" : "is-incorrect");
+        feedbackDiv.innerHTML = (data.is_correct ? "✅ " : "❌ ") + data.explanation;
+    }
+
+    function playAudio(speed) {
+        if (!lessonText) return;
+        window.speechSynthesis.cancel();
+        currentSpeech = new SpeechSynthesisUtterance(lessonText);
+        currentSpeech.rate = speed;
+        window.speechSynthesis.speak(currentSpeech);
+    }
+    function stopAudio() { window.speechSynthesis.cancel(); }
+    function replayAudio() { if (currentSpeech) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(currentSpeech); } }
+    function toggleLargeText() { document.body.classList.toggle("large-text"); }
+    function toggleContrast() { document.body.classList.toggle("high-contrast"); }
+    function toggleDyslexia() { document.body.classList.toggle("dyslexia"); }
+</script>
+</body>
+</html>
